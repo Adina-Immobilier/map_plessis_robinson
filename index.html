@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carte des Ventes Immobilières</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+    <style>
+        #map { height: 600px; }
+        #filters { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Carte des Ventes Immobilières à Plessis-Robinson</h2>
+    <div id="filters">
+        <label for="yearFilter">Filtrer par année : </label>
+        <select id="yearFilter">
+            <option value="all">Toutes les années</option>
+            <option value="2019">2019</option>
+            <option value="2020">2020</option>
+            <option value="2021">2021</option>
+            <option value="2022">2022</option>
+            <option value="2023">2023</option>
+            <option value="2024">2024</option>
+        </select>
+        
+        <label for="typeFilter">Filtrer par type de bien : </label>
+        <select id="typeFilter">
+            <option value="all">Tous les types</option>
+            <option value="Appartement">🏢 Appartement</option>
+            <option value="Maison">🏡 Maison</option>
+            <option value="Dépendance">🏚️ Dépendance</option>
+        </select>
+        
+        <label for="piecesFilter">Filtrer par nombre de pièces : </label>
+        <select id="piecesFilter">
+            <option value="all">Tous</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5 et +</option>
+        </select>
+        
+        <label for="priceMin">Prix min 💰: </label>
+        <input type="number" id="priceMin" placeholder="Min" />
+        
+        <label for="priceMax">Prix max 💰💰💰: </label>
+        <input type="number" id="priceMax" placeholder="Max" />
+        
+        <label for="sizeMin">Surface min 📏: </label>
+        <input type="number" id="sizeMin" placeholder="Min" />
+        
+        <label for="sizeMax">Surface max 📏: </label>
+        <input type="number" id="sizeMax" placeholder="Max" />
+    </div>
+
+    <div id="map"></div>
+    
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script>
+        var map = L.map('map').setView([48.78, 2.26], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        
+        var markers = L.markerClusterGroup();
+        
+        var redIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34]
+        });
+        
+        var ventes = [];
+        
+        fetch('plessis_robinson_transactions.json')
+            .then(response => response.json())
+            .then(data => {
+                ventes = data;
+                updateMap();
+            })
+            .catch(error => console.error("❌ Erreur de chargement du fichier JSON :", error.message));
+
+        function updateMap() {
+            markers.clearLayers();
+            
+            var year = document.getElementById('yearFilter').value;
+            var type = document.getElementById('typeFilter').value;
+            var pieces = document.getElementById('piecesFilter').value;
+            var priceMin = document.getElementById('priceMin').value;
+            var priceMax = document.getElementById('priceMax').value;
+            var sizeMin = document.getElementById('sizeMin').value;
+            var sizeMax = document.getElementById('sizeMax').value;
+            
+            ventes.forEach(function(vente) {
+                var venteYear = vente.date_mutation ? vente.date_mutation.substring(0, 4) : '';
+                if (vente.latitude !== null && vente.longitude !== null &&
+                    (year === 'all' || venteYear === year) &&
+                    (type === 'all' || vente.type_local === type) &&
+                    (pieces === 'all' || (pieces === '5' ? vente.nombre_pieces_principales >= 5 : vente.nombre_pieces_principales == pieces)) &&
+                    (priceMin === '' || vente.valeur_fonciere >= parseInt(priceMin)) &&
+                    (priceMax === '' || vente.valeur_fonciere <= parseInt(priceMax)) &&
+                    (sizeMin === '' || vente.surface_reelle_bati >= parseInt(sizeMin)) &&
+                    (sizeMax === '' || vente.surface_reelle_bati <= parseInt(sizeMax))) {
+                    
+                    var marker = L.marker([vente.latitude, vente.longitude], { icon: redIcon })
+                        .bindPopup(`<b>📍 ${vente.adresse_complete || 'Adresse inconnue'}</b><br>
+                            📅 Date de mutation : ${vente.date_mutation}<br>
+                            💰 Prix : ${vente.valeur_fonciere ? vente.valeur_fonciere.toLocaleString('fr-FR') + " €" : "Non spécifié"}<br>
+                            🏠 Type : ${vente.type_local || "Non spécifié"}<br>
+                            📏 Surface : ${vente.surface_reelle_bati ? vente.surface_reelle_bati + " m²" : "Non spécifié"}<br>
+                            🛏️ Pièces : ${vente.nombre_pieces_principales || "Non spécifié"}`);
+                    markers.addLayer(marker);
+                }
+            });
+            
+            map.addLayer(markers);
+        }
+        
+        document.querySelectorAll('#filters select, #filters input').forEach(element => {
+            element.addEventListener('change', updateMap);
+        });
+    </script>
+</body>
+</html>
